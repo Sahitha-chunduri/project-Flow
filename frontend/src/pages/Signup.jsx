@@ -2,19 +2,51 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const Signup = () => {
-  const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+
     if (password !== confirmPassword) {
       alert('Passwords do not match');
       return;
     }
-    navigate('/dashboard');
+
+    const payload = {
+      username,
+      firstName,
+      lastName,
+      email,
+      password,
+    };
+
+    try {
+      const response = await fetch('http://localhost:5000/user/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert("Registration successful!");
+        navigate('/dashboard');
+      } else {
+        alert(data.message || "Registration failed");
+      }
+    } catch (error) {
+      console.error("Error during registration:", error);
+      alert("Something went wrong");
+    }
   };
 
   return (
@@ -107,13 +139,35 @@ const Signup = () => {
           <div className="card-description">Sign up for your ProjectFlow account</div>
           <form onSubmit={handleSubmit}>
             <div className="form-group">
-              <label htmlFor="name">Full Name</label>
+              <label htmlFor="username">Username</label>
               <input
-                id="name"
+                id="username"
                 type="text"
-                placeholder="Enter your full name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                placeholder="Enter Username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="firstname">First Name</label>
+              <input
+                id="firstname"
+                type="text"
+                placeholder="Enter Your First Name"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="lastname">Last Name</label>
+              <input
+                id="lastname"
+                type="text"
+                placeholder="Enter Your Last Name"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
                 required
               />
             </div>

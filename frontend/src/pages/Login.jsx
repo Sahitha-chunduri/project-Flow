@@ -1,14 +1,41 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { login, isAuthenticated } = useAuth();
 
-  const handleSubmit = (e) => {
+  useEffect(() => {
+    if (isAuthenticated()) {
+      navigate('/dashboard');
+    }
+  }, [isAuthenticated, navigate]);
+
+  const handleSubmit = async (e) => { 
     e.preventDefault();
-    navigate('/dashboard');
+    setError('');
+    setIsLoading(true);
+    
+    try {
+      const result = await login(email, password);
+      
+      if (result.success) {
+        console.log('Login successful, navigating to dashboard');
+        navigate('/dashboard');
+      } else {
+        setError(result.error || "Login failed");
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+      setError("Something went wrong");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -79,6 +106,10 @@ const Login = () => {
           button.submit-btn:hover {
             background-color: #4338ca;
           }
+          button.submit-btn:disabled {
+            background-color: #9ca3af;
+            cursor: not-allowed;
+          }
           .signup-link {
             margin-top: 1rem;
             text-align: center;
@@ -92,6 +123,16 @@ const Login = () => {
             text-decoration: underline;
             font-weight: 500;
           }
+          .error-message {
+            background: #fee;
+            color: #c33;
+            padding: 0.75rem;
+            border-radius: 0.375rem;
+            text-align: center;
+            font-size: 0.875rem;
+            border: 1px solid #fcc;
+            margin-bottom: 1rem;
+          }
         `}
       </style>
       <div className="login-container">
@@ -99,6 +140,8 @@ const Login = () => {
           <div className="card-title">Welcome back</div>
           <div className="card-description">Sign in to your ProjectFlow account</div>
           <form onSubmit={handleSubmit}>
+            {error && <div className="error-message">{error}</div>}
+            
             <div className="form-group">
               <label htmlFor="email">Email</label>
               <input
@@ -108,6 +151,7 @@ const Login = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                disabled={isLoading}
               />
             </div>
             <div className="form-group">
@@ -119,9 +163,16 @@ const Login = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                disabled={isLoading}
               />
             </div>
-            <button type="submit" className="submit-btn">Sign In</button>
+            <button 
+              type="submit" 
+              className="submit-btn"
+              disabled={isLoading}
+            >
+              {isLoading ? 'Signing in...' : 'Sign In'}
+            </button>
           </form>
           <div className="signup-link">
             Don't have an account?{' '}

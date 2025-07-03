@@ -51,8 +51,16 @@ const Profile = () => {
     }));
   };
 
-  const handleLogout = () => {
-    navigate('/login');
+  const handleLogout = async() => {
+    try{
+      await fetch('http://localhost:5000/user/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      navigate('/login');
+    }catch(error){
+      console.error("Login Falied", error);
+    }
   };
 
   const handleCancel = (type) => {

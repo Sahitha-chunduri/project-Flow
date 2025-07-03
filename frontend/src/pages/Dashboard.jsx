@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
 import Sidebar from '../components/Sidebar';
 import KanbanBoard from '../components/KanbanBoard';
 import Analytics from '../components/Analytics';
@@ -9,6 +10,10 @@ import './Dashboard.css';
 
 const Dashboard = () => {
   const [activeView, setActiveView] = useState('kanban');
+  const { user, logout } = useAuth();
+  const handleLogout = () => {
+  logout();
+  };
 
   const renderActiveView = () => {
     switch (activeView) {
@@ -29,8 +34,16 @@ const Dashboard = () => {
 
   return (
     <div className="dashboard">
-      <Sidebar activeView={activeView} setActiveView={setActiveView} />
+      <Sidebar 
+        activeView={activeView} 
+        setActiveView={setActiveView}
+        user={user}
+        onLogout={handleLogout}
+      />
       <main className="main-content">
+        <header className="dashboard-header">
+          <h1>Welcome back, {user?.email || 'User'}!</h1>
+        </header>
         {renderActiveView()}
       </main>
     </div>
