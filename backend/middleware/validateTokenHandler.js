@@ -8,18 +8,35 @@ const validateToken = asyncHandler(async (req, res, next) => {
     if (authHeader && authHeader.startsWith("Bearer")) {
         token = authHeader.split(" ")[1];
         
-        jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
-            if (err) {
-                res.status(401);
-                throw new Error("User is not authorized");
-            }
-            
+        try {
+            const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
             req.user = decoded;
             next();
-        });
+        } catch (err) {
+            console.error("Token validation error:", err.message);
+            
+            if (err.name === 'TokenExpiredError') {
+                res.status(401).json({ 
+                    message: "Access token expired",
+                    error: "TOKEN_EXPIRED" 
+                });
+            } else if (err.name === 'JsonWebTokenError') {
+                res.status(401).json({ 
+                    message: "Invalid access token",
+                    error: "INVALID_TOKEN" 
+                });
+            } else {
+                res.status(401).json({ 
+                    message: "User is not authorized",
+                    error: "UNAUTHORIZED" 
+                });
+            }
+        }
     } else {
-        res.status(401);
-        throw new Error("User is not authorized or token is missing");
+        res.status(401).json({ 
+            message: "User is not authorized or token is missing",
+            error: "NO_TOKEN" 
+        });
     }
 });
 
