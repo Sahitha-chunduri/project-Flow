@@ -10,7 +10,9 @@ connectdb();
 
 app.use(cors({
   origin: 'http://localhost:5173',
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json());
@@ -18,7 +20,7 @@ app.use(cookieParser());
 
 app.use("/user", require('./routes/userroute'));
 app.use("/api", require('./routes/protectedRoutes')); 
-
+app.use("/api/kanban", require('./routes/kanban'))
 app.use((err, req, res, next) => {
   console.error("Error:", err.message);
   res.status(err.status || 500).json({

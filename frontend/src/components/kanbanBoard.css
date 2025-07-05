@@ -221,3 +221,19 @@
   background: rgba(59, 130, 246, 0.2);
   border-color: #2563eb;
 }
+.task-project-name {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.project-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background-color: #f3f4f6;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 500;
+  color: #6b7280;
+  text-transform: uppercase;
+}

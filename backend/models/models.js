@@ -118,10 +118,16 @@ const taskSchema = mongoose.Schema({
         type: String,
         trim: true
     },
-    project: {
-        type: mongoose.Schema.Types.ObjectId,
-        required: true,
-        ref: "Project"
+    // project: {
+    //     type: mongoose.Schema.Types.ObjectId,
+    //     required: false
+    // },
+    // Add this field for easy querying and filtering
+    projectName: {
+        type: String,
+        required: [true, "Please add project name"],
+        trim: true,
+        index: true
     },
     assignedTo: {
         type: mongoose.Schema.Types.ObjectId,
@@ -205,11 +211,15 @@ const taskSchema = mongoose.Schema({
     completedBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User"
+    },
+    // Add this for soft deletion
+    isArchived: {
+        type: Boolean,
+        default: false
     }
 }, {
     timestamps: true
 });
-
 
 const commentSchema = mongoose.Schema({
     content: {
