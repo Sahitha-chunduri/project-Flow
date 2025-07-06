@@ -118,11 +118,6 @@ const taskSchema = mongoose.Schema({
         type: String,
         trim: true
     },
-    // project: {
-    //     type: mongoose.Schema.Types.ObjectId,
-    //     required: false
-    // },
-    // Add this field for easy querying and filtering
     projectName: {
         type: String,
         required: [true, "Please add project name"],
@@ -212,7 +207,6 @@ const taskSchema = mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: "User"
     },
-    // Add this for soft deletion
     isArchived: {
         type: Boolean,
         default: false
@@ -263,43 +257,43 @@ const commentSchema = mongoose.Schema({
 });
 
 const activitySchema = mongoose.Schema({
-    user: {
-        type: mongoose.Schema.Types.ObjectId,
-        required: true,
-        ref: "User"
-    },
-    action: {
-        type: String,
-        required: true,
-        enum: [
-            'task_created', 'task_updated', 'task_deleted', 'task_assigned',
-            'project_created', 'project_updated', 'project_deleted',
-            'comment_added', 'comment_updated', 'comment_deleted',
-            'user_joined', 'user_left', 'status_changed', 'priority_changed'
-        ]
-    },
-    target: {
-        type: String,
-        required: true,
-        enum: ['task', 'project', 'comment', 'user']
-    },
-    targetId: {
-        type: mongoose.Schema.Types.ObjectId,
-        required: true
-    },
-    project: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Project"
-    },
-    description: {
-        type: String,
-        required: true
-    },
-    metadata: {
-        type: mongoose.Schema.Types.Mixed
-    }
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: true,
+    ref: "User"
+  },
+  action: {
+    type: String,
+    required: true,
+    enum: [
+      'task_created', 'task_updated', 'task_deleted', 'task_assigned',
+      'project_created', 'project_updated', 'project_deleted',
+      'comment_added', 'comment_updated', 'comment_deleted',
+      'user_joined', 'user_left', 'status_changed', 'priority_changed'
+    ]
+  },
+  target: {
+    type: String,
+    required: true,
+    enum: ['task', 'project', 'comment', 'user']
+  },
+  targetId: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: true
+  },
+  projectName: { 
+    type: String,
+    required: true
+  },
+  description: {
+    type: String,
+    required: true
+  },
+  metadata: {
+    type: mongoose.Schema.Types.Mixed
+  }
 }, {
-    timestamps: true
+  timestamps: true
 });
 
 

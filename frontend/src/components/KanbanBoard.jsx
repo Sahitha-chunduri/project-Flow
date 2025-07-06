@@ -12,108 +12,100 @@ const KanbanBoard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const API_BASE_URL = 'http://localhost:5000';
+
   const fetchKanbanData = async () => {
-  try {
-    
-    setLoading(true);
-    setError(null);
-    
-    const token = localStorage.getItem('accessToken');
-    if (!token) {
-      throw new Error('No authentication token found. Please login.');
-    }
-    
-    let url, boardTitle;
-    if (projectName) {
-      url = `${API_BASE_URL}/api/kanban/projects/${encodeURIComponent(projectName)}/board`;
-      boardTitle = decodeURIComponent(projectName);
-    } else {
-      url = `${API_BASE_URL}/api/kanban/tasks`;
-      boardTitle = 'All Projects';
-    }
-    
-    // try {
-    //   const testResponse = await fetch(`${API_BASE_URL}/api/kanban/tasks`, {
-    //     method: 'HEAD',
-    //     headers: {
-    //       'Authorization': `Bearer ${token}`,
-    //     }
-    //   });
-    // } catch (connectError) {
-    //   throw new Error(`Cannot connect to backend server at ${API_BASE_URL}. Make sure the backend server is running.`);
-    // }
-    
-    const response = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        throw new Error('No authentication token found. Please login.');
       }
-    });
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      const textResponse = await response.text();
-      throw new Error(`Server returned non-JSON response. Status: ${response.status}`);
-    }
+      
+      let url, boardTitle;
+      if (projectName) {
+        url = `${API_BASE_URL}/api/kanban/projects/${encodeURIComponent(projectName)}/board`;
+        boardTitle = decodeURIComponent(projectName);
+      } else {
+        url = `${API_BASE_URL}/api/kanban/tasks`;
+        boardTitle = 'All Projects';
+      }
+      
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
-      throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
-    }
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const textResponse = await response.text();
+        throw new Error(`Server returned non-JSON response. Status: ${response.status}`);
+      }
 
-    const data = await response.json();
-    console.log('Fetched data:', data);
-    if (!projectName) {
-      const organizedData = {
-        project: {
-          name: boardTitle,
-          _id: 'all-projects'
-        },
-        columns: [
-          {
-            id: 'todo',
-            title: 'To Do',
-            status: 'todo',
-            tasks: data.filter(task => task.status === 'todo')
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log('Fetched data:', data);
+      
+      if (!projectName) {
+        const organizedData = {
+          project: {
+            name: boardTitle,
+            _id: 'all-projects'
           },
-          {
-            id: 'in-progress',
-            title: 'In Progress',
-            status: 'in-progress',
-            tasks: data.filter(task => task.status === 'in-progress')
-          },
-          {
-            id: 'review',
-            title: 'Review',
-            status: 'review',
-            tasks: data.filter(task => task.status === 'review')
-          },
-          {
-            id: 'completed',
-            title: 'Completed',
-            status: 'completed',
-            tasks: data.filter(task => task.status === 'completed')
-          }
-        ]
-      };
-      setKanbanData(organizedData);
-    } else {
-      setKanbanData(data);
+          columns: [
+            {
+              id: 'todo',
+              title: 'To Do',
+              status: 'todo',
+              tasks: data.filter(task => task.status === 'todo')
+            },
+            {
+              id: 'in-progress',
+              title: 'In Progress',
+              status: 'in-progress',
+              tasks: data.filter(task => task.status === 'in-progress')
+            },
+            {
+              id: 'review',
+              title: 'Review',
+              status: 'review',
+              tasks: data.filter(task => task.status === 'review')
+            },
+            {
+              id: 'completed',
+              title: 'Completed',
+              status: 'completed',
+              tasks: data.filter(task => task.status === 'completed')
+            }
+          ]
+        };
+        setKanbanData(organizedData);
+      } else {
+        setKanbanData(data);
+      }
+    } catch (err) {
+      console.error('Fetch error:', err);
+      let errorMessage = err.message;
+      if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
+        errorMessage = `Network error: Cannot connect to backend server. Please check:
+        1. Backend server is running on ${API_BASE_URL}
+        2. CORS is configured correctly
+        3. No firewall blocking the connection`;
+      }
+      
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
     }
-  } catch (err) {
-    console.error('Fetch error:', err);
-    let errorMessage = err.message;
-    if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
-      errorMessage = `Network error: Cannot connect to backend server. Please check:
-      1. Backend server is running on ${API_BASE_URL}
-      2. CORS is configured correctly
-      3. No firewall blocking the connection`;
-    }
-    
-    setError(errorMessage);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
+
   useEffect(() => {
     fetchKanbanData();
   }, [projectName]);
@@ -143,11 +135,11 @@ const KanbanBoard = () => {
         });
 
         if (!response.ok) {
-          throw new Error('Failed to update task');
+          const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+          throw new Error(errorData.message || 'Failed to update task');
         }
       } else {
         const projectNameForTask = projectName || taskData.projectName;
-        
         if (!projectNameForTask) {
           throw new Error('Project name is required for new tasks');
         }
@@ -162,13 +154,17 @@ const KanbanBoard = () => {
         });
 
         if (!response.ok) {
-          throw new Error('Failed to create task');
+          const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+          throw new Error(errorData.message || 'Failed to create task');
         }
       }
+l
       await fetchKanbanData();
       setIsModalOpen(false);
+      setSelectedTask(null);
     } catch (err) {
       console.error('Error saving task:', err);
+      alert(`Error saving task: ${err.message}`);
     }
   };
 
@@ -185,33 +181,46 @@ const KanbanBoard = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to move task');
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        throw new Error(errorData.message || 'Failed to move task');
       }
       await fetchKanbanData();
     } catch (err) {
       console.error('Error moving task:', err);
+      alert(`Error moving task: ${err.message}`);
     }
   };
 
-  const handleTaskDelete = async (taskId) => {
-    try {
-      const token = localStorage.getItem('accessToken');
-      const response = await fetch(`${API_BASE_URL}/api/kanban/tasks/${taskId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+  const handleTaskDelete = async () => {
+  if (!selectedTask) {
+    console.error('No task selected for deletion');
+    return;
+  }
 
-      if (!response.ok) {
-        throw new Error('Failed to delete task');
+  try {
+    const token = localStorage.getItem('accessToken');
+    const response = await fetch(`${API_BASE_URL}/api/kanban/tasks/${selectedTask._id}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
       }
-      await fetchKanbanData();
-    } catch (err) {
-      console.error('Error deleting task:', err);
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+      throw new Error(errorData.message || 'Failed to delete task');
     }
-  };
+
+    await fetchKanbanData();
+    setIsModalOpen(false);
+    setSelectedTask(null);
+  } catch (err) {
+    console.error('Error deleting task:', err);
+    alert(`Failed to delete task: ${err.message}`);
+  }
+};
+
 
   const getPriorityColor = (priority) => {
     switch (priority) {
@@ -356,16 +365,18 @@ const KanbanBoard = () => {
         ))}
       </div>
 
-    
-{isModalOpen && (
-  <TaskModal
-    task={selectedTask}
-    onClose={() => setIsModalOpen(false)}
-    onSave={handleTaskSave}
-    onDelete={selectedTask ? () => handleTaskDelete(selectedTask._id) : null}
-    currentProject={projectName ? decodeURIComponent(projectName) : null}
-  />
-)}
+      {isModalOpen && (
+        <TaskModal
+          task={selectedTask}
+          onClose={() => {
+            setIsModalOpen(false);
+            setSelectedTask(null);
+          }}
+          onSave={handleTaskSave}
+          onDelete={selectedTask ? handleTaskDelete : null}
+          currentProject={projectName ? decodeURIComponent(projectName) : null}
+        />
+      )}
     </div>
   );
 };

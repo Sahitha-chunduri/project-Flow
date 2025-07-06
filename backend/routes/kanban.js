@@ -3,7 +3,7 @@ const router = express.Router();
 const { Task, User, Activity } = require('../models/models');
 const auth = require('../middleware/validateTokenHandler'); 
 
-// GET /api/kanban/projects - Get all project names for user (unique projectName values)
+// GET /api/kanban/projects - Get all project names for user 
 router.get('/projects', auth, async (req, res) => {
   try {
     const projects = await Task.aggregate([
@@ -57,8 +57,6 @@ router.get('/projects', auth, async (req, res) => {
 router.get('/projects/:name/board', auth, async (req, res) => {
   try {
     const projectName = decodeURIComponent(req.params.name);
-    
-    // Check if user has access to this project
     const userTasks = await Task.find({
       projectName: projectName,
       $or: [
@@ -82,7 +80,7 @@ router.get('/projects/:name/board', auth, async (req, res) => {
     const kanbanData = {
       project: {
         name: projectName,
-        _id: projectName // Using project name as ID
+        _id: projectName 
       },
       columns: [
         {
@@ -128,8 +126,6 @@ router.post('/projects/:name/tasks', auth, async (req, res) => {
     console.log('Request body:', req.body);
     console.log('Project name from URL:', projectName);
     console.log('User ID:', req.user.id);
-
-    // Validate required fields
     if (!title || !title.trim()) {
       return res.status(400).json({ message: 'Task title is required' });
     }
@@ -138,13 +134,10 @@ router.post('/projects/:name/tasks', auth, async (req, res) => {
       return res.status(400).json({ message: 'Project name is required' });
     }
 
-    // Handle assignedTo - convert to ObjectId if valid, otherwise set to null
     let assignedToId = null;
     if (assignedTo && assignedTo.trim() !== '') {
       try {
-        // Check if it's a valid ObjectId format (exactly 24 characters)
         if (mongoose.Types.ObjectId.isValid(assignedTo) && assignedTo.length === 24) {
-          // Verify user exists
           const userExists = await User.findById(assignedTo);
           if (userExists) {
             assignedToId = new mongoose.Types.ObjectId(assignedTo);
@@ -161,20 +154,14 @@ router.post('/projects/:name/tasks', auth, async (req, res) => {
         return res.status(400).json({ message: 'Error processing assigned user' });
       }
     }
-
-    // Validate createdBy ObjectId
     if (!mongoose.Types.ObjectId.isValid(req.user.id)) {
       return res.status(400).json({ message: 'Invalid user ID format' });
     }
-
-    // Create task object with proper validation
     const taskData = {
       title: title.trim(),
       description: description ? description.trim() : '',
-      // Remove or fix the project field - since you're using projectName, you might not need this
-      // project: new mongoose.Types.ObjectId(req.user.id), // REMOVE THIS LINE
       projectName: projectName.trim(),
-      assignedTo: assignedToId, // This will be either a valid ObjectId or null
+      assignedTo: assignedToId, 
       createdBy: new mongoose.Types.ObjectId(req.user.id),
       status: status || 'todo',
       priority: priority || 'medium',
@@ -189,11 +176,9 @@ router.post('/projects/:name/tasks', auth, async (req, res) => {
     const newTask = new Task(taskData);
     const savedTask = await newTask.save();
     
-    // Populate the saved task
     await savedTask.populate('assignedTo', 'firstName lastName email avatar');
     await savedTask.populate('createdBy', 'firstName lastName email');
 
-    // Create activity log
     try {
       const activity = new Activity({
         user: new mongoose.Types.ObjectId(req.user.id),
@@ -207,15 +192,13 @@ router.post('/projects/:name/tasks', auth, async (req, res) => {
       await activity.save();
     } catch (activityError) {
       console.log('Activity log error:', activityError);
-      // Don't fail the task creation if activity logging fails
     }
 
     res.status(201).json(savedTask);
   } catch (error) {
     console.error('Task creation error:', error);
     console.error('Error details:', error.message);
-    
-    // Handle different types of errors
+
     if (error.name === 'ValidationError') {
       const validationErrors = Object.values(error.errors).map(err => ({
         path: err.path,
@@ -262,7 +245,6 @@ router.put('/tasks/:id', auth, async (req, res) => {
       return res.status(404).json({ message: 'Task not found' });
     }
 
-    // Check if user has access to this task
     if (task.createdBy.toString() !== req.user.id && 
         (task.assignedTo && task.assignedTo.toString() !== req.user.id)) {
       return res.status(403).json({ message: 'Access denied' });
@@ -271,7 +253,6 @@ router.put('/tasks/:id', auth, async (req, res) => {
     const oldStatus = task.status;
     const oldPriority = task.priority;
 
-    // Update task fields
     if (title !== undefined) task.title = title;
     if (description !== undefined) task.description = description;
     if (assignedTo !== undefined) task.assignedTo = assignedTo;
@@ -291,7 +272,6 @@ router.put('/tasks/:id', auth, async (req, res) => {
     await updatedTask.populate('assignedTo', 'firstName lastName email avatar');
     await updatedTask.populate('createdBy', 'firstName lastName email');
 
-    // Log activity if status changed
     if (oldStatus !== status) {
       const activity = new Activity({
         user: req.user.id,
@@ -313,37 +293,46 @@ router.put('/tasks/:id', auth, async (req, res) => {
 
 // DELETE /api/kanban/tasks/:id - Delete task
 router.delete('/tasks/:id', auth, async (req, res) => {
+  console.log("User from token:", req.user);
+
   try {
     const task = await Task.findById(req.params.id);
     if (!task) {
       return res.status(404).json({ message: 'Task not found' });
     }
-
-    // Check if user has access to delete this task (only creator can delete)
     if (task.createdBy.toString() !== req.user.id) {
       return res.status(403).json({ message: 'Not authorized to delete this task' });
     }
+    const taskTitle = task.title;
+    const taskProjectName = task.projectName;
 
     await Task.findByIdAndDelete(req.params.id);
+    
+    try {
+      const activity = new Activity({
+        user: req.user.id,
+        action: 'task_deleted', 
+        target: 'task',
+        targetId: req.params.id, 
+        projectName: taskProjectName,
+        description: `Deleted task "${taskTitle}"`, 
+        metadata: {
+          title: taskTitle,
+          projectName: taskProjectName
+        }
+      });
 
-    // Log activity
-    const activity = new Activity({
-      user: req.user.id,
-      action: 'task_deleted',
-      target: 'task',
-      targetId: task._id,
-      project: task.projectName,
-      description: `Deleted task "${task.title}"`,
-      metadata: { taskTitle: task.title }
-    });
-    await activity.save();
+      await activity.save();
+    } catch (activityError) {
+      console.log('Activity log error:', activityError);
+    }
 
     res.json({ message: 'Task deleted successfully' });
   } catch (error) {
+    console.error('Delete task error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
-
 // PUT /api/kanban/tasks/:id/move - Move task to different status/column
 router.put('/tasks/:id/move', auth, async (req, res) => {
   try {
@@ -354,7 +343,6 @@ router.put('/tasks/:id/move', auth, async (req, res) => {
       return res.status(404).json({ message: 'Task not found' });
     }
 
-    // Check if user has access to this task
     if (task.createdBy.toString() !== req.user.id && 
         (task.assignedTo && task.assignedTo.toString() !== req.user.id)) {
       return res.status(403).json({ message: 'Access denied' });
@@ -372,7 +360,6 @@ router.put('/tasks/:id/move', auth, async (req, res) => {
     await updatedTask.populate('assignedTo', 'firstName lastName email avatar');
     await updatedTask.populate('createdBy', 'firstName lastName email');
 
-    // Log activity
     const activity = new Activity({
       user: req.user.id,
       action: 'status_changed',
@@ -394,8 +381,6 @@ router.put('/tasks/:id/move', auth, async (req, res) => {
 router.get('/projects/:name/members', auth, async (req, res) => {
   try {
     const projectName = decodeURIComponent(req.params.name);
-    
-    // Check if user has access to this project
     const userTasks = await Task.find({
       projectName: projectName,
       $or: [
@@ -408,7 +393,6 @@ router.get('/projects/:name/members', auth, async (req, res) => {
       return res.status(404).json({ message: 'Project not found or access denied' });
     }
 
-    // Get all unique users who have worked on this project
     const tasks = await Task.find({ projectName: projectName })
       .populate('createdBy', 'firstName lastName email avatar')
       .populate('assignedTo', 'firstName lastName email avatar');
@@ -416,7 +400,6 @@ router.get('/projects/:name/members', auth, async (req, res) => {
     const membersMap = new Map();
     
     tasks.forEach(task => {
-      // Add creator
       if (task.createdBy) {
         membersMap.set(task.createdBy._id.toString(), {
           _id: task.createdBy._id,
@@ -427,8 +410,6 @@ router.get('/projects/:name/members', auth, async (req, res) => {
           role: 'contributor'
         });
       }
-      
-      // Add assignee
       if (task.assignedTo) {
         membersMap.set(task.assignedTo._id.toString(), {
           _id: task.assignedTo._id,
@@ -460,7 +441,6 @@ router.get('/tasks/:id', auth, async (req, res) => {
       return res.status(404).json({ message: 'Task not found' });
     }
 
-    // Check if user has access to this task
     if (task.createdBy._id.toString() !== req.user.id && 
         (task.assignedTo && task.assignedTo._id.toString() !== req.user.id)) {
       return res.status(403).json({ message: 'Access denied' });
@@ -477,7 +457,6 @@ router.get('/tasks', auth, async (req, res) => {
   try {
     const { projectName, status, priority, assignedTo } = req.query;
     
-    // Build filter
     const filter = {
       $or: [
         { createdBy: req.user.id },
