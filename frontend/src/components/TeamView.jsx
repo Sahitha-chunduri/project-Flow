@@ -1,100 +1,124 @@
-import { useState } from 'react';
-import { Mail, Phone, MapPin, Calendar, MessageCircle, Plus, MoreHorizontal, Trash2, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Mail, Phone, MapPin, Calendar, MessageCircle, Plus, MoreHorizontal, Trash2, X, Loader2 } from 'lucide-react';
+import './TeamView.css';
 
 const TeamView = () => {
   const [selectedMember, setSelectedMember] = useState(null);
   const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState(null);
   const [showMemberMenu, setShowMemberMenu] = useState(null);
-  const [teamMembers, setTeamMembers] = useState([
-    {
-      id: '1',
-      name: 'John Doe',
-      role: 'Frontend Developer',
-      email: 'john.doe@company.com',
-      phone: '+1 (555) 123-4567',
-      location: 'New York, USA',
-      avatar: 'JD',
-      status: 'online',
-      tasksCompleted: 24,
-      tasksInProgress: 3,
-      joinDate: '2023-01-15'
-    },
-    {
-      id: '2',
-      name: 'Jane Smith',
-      role: 'Backend Developer',
-      email: 'jane.smith@company.com',
-      phone: '+1 (555) 234-5678',
-      location: 'San Francisco, USA',
-      avatar: 'JS',
-      status: 'online',
-      tasksCompleted: 31,
-      tasksInProgress: 2,
-      joinDate: '2022-08-20'
-    },
-    {
-      id: '3',
-      name: 'Mike Johnson',
-      role: 'Full Stack Developer',
-      email: 'mike.johnson@company.com',
-      phone: '+1 (555) 345-6789',
-      location: 'Austin, USA',
-      avatar: 'MJ',
-      status: 'busy',
-      tasksCompleted: 18,
-      tasksInProgress: 5,
-      joinDate: '2023-03-10'
-    },
-    {
-      id: '4',
-      name: 'Sarah Wilson',
-      role: 'UI/UX Designer',
-      email: 'sarah.wilson@company.com',
-      phone: '+1 (555) 456-7890',
-      location: 'Seattle, USA',
-      avatar: 'SW',
-      status: 'offline',
-      tasksCompleted: 22,
-      tasksInProgress: 1,
-      joinDate: '2022-11-05'
-    },
-    {
-      id: '5',
-      name: 'Alex Brown',
-      role: 'QA Engineer',
-      email: 'alex.brown@company.com',
-      phone: '+1 (555) 567-8901',
-      location: 'Boston, USA',
-      avatar: 'AB',
-      status: 'online',
-      tasksCompleted: 16,
-      tasksInProgress: 4,
-      joinDate: '2023-05-12'
-    },
-    {
-      id: '6',
-      name: 'Emily Davis',
-      role: 'Project Manager',
-      email: 'emily.davis@company.com',
-      phone: '+1 (555) 678-9012',
-      location: 'Chicago, USA',
-      avatar: 'ED',
-      status: 'online',
-      tasksCompleted: 28,
-      tasksInProgress: 6,
-      joinDate: '2022-06-18'
-    }
-  ]);
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [newMember, setNewMember] = useState({
     name: '',
-    role: '',
+    position: '',
     email: '',
     phone: '',
-    location: '',
-    status: 'online'
+    company: '',
+    notes: '',
+    tags: []
   });
+
+  // API Configuration
+  const API_BASE_URL =  'http://localhost:5000/api';
+
+  // API Helper Functions
+  const getAuthToken = () => {
+    return localStorage.getItem('accessToken') || localStorage.getItem('token');
+  };
+
+  const makeAPIRequest = async (endpoint, options = {}) => {
+    const url = `${API_BASE_URL}${endpoint}`;
+    const token = getAuthToken();
+
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    const config = {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...options.headers,
+      },
+      ...options,
+    };
+
+    try {
+      const response = await fetch(url, config);
+      
+      if (response.status === 401) {
+        // Token expired, redirect to login
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+        throw new Error('Authentication failed');
+      }
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || `HTTP error! status: ${response.status}`);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('API request failed:', error);
+      throw error;
+    }
+  };
+
+  // Load team members from backend
+  useEffect(() => {
+    fetchTeamMembers();
+  }, [currentPage, searchTerm]);
+
+  const fetchTeamMembers = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const queryParams = new URLSearchParams();
+      queryParams.append('page', currentPage);
+      queryParams.append('limit', 12);
+      if (searchTerm) queryParams.append('search', searchTerm);
+      
+      const response = await makeAPIRequest(`/contacts?${queryParams.toString()}`);
+
+      if (response.success) {
+        // Transform backend data to match frontend structure
+        const transformedMembers = response.data.map(contact => ({
+          id: contact.id,
+          name: contact.name,
+          role: contact.position || 'Team Member',
+          email: contact.email,
+          phone: contact.phone,
+          location: contact.company || 'Not specified',
+          avatar: generateAvatar(contact.name),
+          status: 'online', // Default status since backend doesn't track this
+          tasksCompleted: Math.floor(Math.random() * 20), // Mock data
+          tasksInProgress: Math.floor(Math.random() * 5),
+          joinDate: new Date(contact.createdAt).toISOString().split('T')[0],
+          notes: contact.notes,
+          tags: contact.tags || []
+        }));
+
+        setTeamMembers(transformedMembers);
+        setTotalPages(response.pagination.totalPages);
+      }
+    } catch (err) {
+      console.error('Error fetching team members:', err);
+      setError(err.message || 'Failed to load team members. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -102,27 +126,6 @@ const TeamView = () => {
       case 'busy': return '#f59e0b';
       case 'offline': return '#6b7280';
       default: return '#6b7280';
-    }
-  };
-
-  const getStatusBadgeStyle = (status) => {
-    const baseStyle = {
-      display: 'inline-block',
-      padding: '4px 12px',
-      borderRadius: '12px',
-      fontSize: '12px',
-      fontWeight: '500',
-      marginTop: '8px'
-    };
-    switch (status) {
-      case 'online':
-        return { ...baseStyle, backgroundColor: '#dcfce7', color: '#166534' };
-      case 'busy':
-        return { ...baseStyle, backgroundColor: '#fef3c7', color: '#92400e' };
-      case 'offline':
-        return { ...baseStyle, backgroundColor: '#f1f5f9', color: '#475569' };
-      default:
-        return { ...baseStyle, backgroundColor: '#f1f5f9', color: '#475569' };
     }
   };
 
@@ -134,46 +137,99 @@ const TeamView = () => {
     setSelectedMember(member);
   };
 
-  const handleAddMember = (e) => {
+  const handleAddMember = async (e) => {
     e.preventDefault();
     
-    if (!newMember.name || !newMember.role || !newMember.email) {
+    if (!newMember.name || !newMember.position || !newMember.email) {
       alert('Please fill in all required fields');
       return;
     }
 
-    const memberToAdd = {
-      id: Date.now().toString(),
-      name: newMember.name,
-      role: newMember.role,
-      email: newMember.email,
-      phone: newMember.phone || 'Not provided',
-      location: newMember.location || 'Not specified',
-      avatar: generateAvatar(newMember.name),
-      status: newMember.status,
-      tasksCompleted: 0,
-      tasksInProgress: 0,
-      joinDate: new Date().toISOString().split('T')[0]
-    };
+    try {
+      setIsSubmitting(true);
+      setError(null);
 
-    setTeamMembers([...teamMembers, memberToAdd]);
-    setNewMember({
-      name: '',
-      role: '',
-      email: '',
-      phone: '',
-      location: '',
-      status: 'online'
-    });
-    setIsAddMemberModalOpen(false);
+      // Transform frontend data to backend format
+      const memberData = {
+        name: newMember.name,
+        email: newMember.email,
+        phone: newMember.phone || '+1 (555) 000-0000',
+        company: newMember.company || '',
+        position: newMember.position,
+        notes: newMember.notes || '',
+        tags: newMember.tags || []
+      };
+
+      const response = await makeAPIRequest('/contacts', {
+        method: 'POST',
+        body: JSON.stringify(memberData),
+      });
+
+      if (response.success) {
+        // Add the new member to the local state
+        const newTeamMember = {
+          id: response.data.id,
+          name: response.data.name,
+          role: response.data.position || 'Team Member',
+          email: response.data.email,
+          phone: response.data.phone,
+          location: response.data.company || 'Not specified',
+          avatar: generateAvatar(response.data.name),
+          status: 'online',
+          tasksCompleted: 0,
+          tasksInProgress: 0,
+          joinDate: new Date(response.data.createdAt).toISOString().split('T')[0],
+          notes: response.data.notes,
+          tags: response.data.tags || []
+        };
+
+        setTeamMembers([newTeamMember, ...teamMembers]);
+        
+        // Reset form
+        setNewMember({
+          name: '',
+          position: '',
+          email: '',
+          phone: '',
+          company: '',
+          notes: '',
+          tags: []
+        });
+        
+        setIsAddMemberModalOpen(false);
+        alert('Team member added successfully!');
+      }
+    } catch (err) {
+      console.error('Error adding team member:', err);
+      setError(err.message || 'Failed to add team member. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleRemoveMember = (memberId) => {
-    setTeamMembers(teamMembers.filter(member => member.id !== memberId));
-    setMemberToRemove(null);
-    setShowMemberMenu(null);
-    if (selectedMember?.id === memberId) {
-      setSelectedMember(null);
+  const handleRemoveMember = async (memberId) => {
+    try {
+      setError(null);
+      
+      const response = await makeAPIRequest(`/contacts/${memberId}`, {
+        method: 'DELETE',
+      });
+      
+      if (response.success) {
+        // Remove from local state
+        setTeamMembers(teamMembers.filter(member => member.id !== memberId));
+        setMemberToRemove(null);
+        setShowMemberMenu(null);
+        
+        if (selectedMember?.id === memberId) {
+          setSelectedMember(null);
+        }
+        
+        alert('Team member removed successfully!');
+      }
+    } catch (err) {
+      console.error('Error removing team member:', err);
+      setError(err.message || 'Failed to remove team member. Please try again.');
     }
   };
 
@@ -189,224 +245,112 @@ const TeamView = () => {
     }));
   };
 
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
+    setCurrentPage(1);
+  };
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setShowMemberMenu(null);
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
+
+  if (loading && teamMembers.length === 0) {
+    return (
+      <div className="team-view">
+        <div className="loading-container">
+          <Loader2 className="spinner" size={48} />
+          <p>Loading team members...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="team-view" style={{
-      padding: '24px',
-      backgroundColor: '#f8fafc',
-      minHeight: '100vh',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-    }}>
-      <div className="team-header" style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '32px'
-      }}>
-        <h2 className="team-title" style={{
-          fontSize: '28px',
-          fontWeight: '700',
-          color: '#1e293b',
-          margin: 0
-        }}>Team Members</h2>
-        <button 
-          className="add-member-btn"
-          onClick={() => setIsAddMemberModalOpen(true)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '12px 20px',
-            backgroundColor: '#3b82f6',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            fontSize: '14px',
-            fontWeight: '500',
-            transition: 'background-color 0.2s'
-          }}
-          onMouseOver={(e) => e.target.style.backgroundColor = '#2563eb'}
-          onMouseOut={(e) => e.target.style.backgroundColor = '#3b82f6'}
-        >
-          <Plus size={20} />
-          Add Member
-        </button>
-      </div>
+    <div className="team-view">
+      {error && (
+        <div className="error-banner">
+          <p>{error}</p>
+          <button onClick={() => setError(null)}>×</button>
+        </div>
+      )}
 
-      <div className="team-stats" style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-        gap: '20px',
-        marginBottom: '32px'
-      }}>
-        <div className="stat-item" style={{
-          backgroundColor: 'white',
-          padding: '24px',
-          borderRadius: '12px',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-          textAlign: 'center'
-        }}>
-          <div className="stat-value" style={{
-            fontSize: '32px',
-            fontWeight: '700',
-            color: '#1e293b',
-            marginBottom: '8px'
-          }}>{teamMembers.length}</div>
-          <div className="stat-label" style={{
-            fontSize: '14px',
-            color: '#64748b',
-            fontWeight: '500'
-          }}>Total Members</div>
-        </div>
-        <div className="stat-item" style={{
-          backgroundColor: 'white',
-          padding: '24px',
-          borderRadius: '12px',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-          textAlign: 'center'
-        }}>
-          <div className="stat-value" style={{
-            fontSize: '32px',
-            fontWeight: '700',
-            color: '#1e293b',
-            marginBottom: '8px'
-          }}>{teamMembers.filter(m => m.status === 'online').length}</div>
-          <div className="stat-label" style={{
-            fontSize: '14px',
-            color: '#64748b',
-            fontWeight: '500'
-          }}>Online Now</div>
-        </div>
-        <div className="stat-item" style={{
-          backgroundColor: 'white',
-          padding: '24px',
-          borderRadius: '12px',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-          textAlign: 'center'
-        }}>
-          <div className="stat-value" style={{
-            fontSize: '32px',
-            fontWeight: '700',
-            color: '#1e293b',
-            marginBottom: '8px'
-          }}>{teamMembers.reduce((acc, m) => acc + m.tasksCompleted, 0)}</div>
-          <div className="stat-label" style={{
-            fontSize: '14px',
-            color: '#64748b',
-            fontWeight: '500'
-          }}>Tasks Completed</div>
-        </div>
-        <div className="stat-item" style={{
-          backgroundColor: 'white',
-          padding: '24px',
-          borderRadius: '12px',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-          textAlign: 'center'
-        }}>
-          <div className="stat-value" style={{
-            fontSize: '32px',
-            fontWeight: '700',
-            color: '#1e293b',
-            marginBottom: '8px'
-          }}>{teamMembers.reduce((acc, m) => acc + m.tasksInProgress, 0)}</div>
-          <div className="stat-label" style={{
-            fontSize: '14px',
-            color: '#64748b',
-            fontWeight: '500'
-          }}>Tasks In Progress</div>
+      <div className="team-header">
+        <h2 className="team-title">Team Members</h2>
+        <div className="header-actions">
+          <div className="search-container">
+            <input
+              type="text"
+              placeholder="Search team members..."
+              value={searchTerm}
+              onChange={handleSearchChange}
+              className="search-input"
+            />
+          </div>
+          <button 
+            className="add-member-btn"
+            onClick={() => setIsAddMemberModalOpen(true)}
+          >
+            <Plus size={20} />
+            Add Member
+          </button>
         </div>
       </div>
 
-      <div className="team-grid" style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-        gap: '24px'
-      }}>
+      <div className="team-stats">
+        <div className="stat-item">
+          <div className="stat-value">{teamMembers.length}</div>
+          <div className="stat-label">Total Members</div>
+        </div>
+        <div className="stat-item">
+          <div className="stat-value">{teamMembers.filter(m => m.status === 'online').length}</div>
+          <div className="stat-label">Online Now</div>
+        </div>
+        <div className="stat-item">
+          <div className="stat-value">{teamMembers.reduce((acc, m) => acc + m.tasksCompleted, 0)}</div>
+          <div className="stat-label">Tasks Completed</div>
+        </div>
+        <div className="stat-item">
+          <div className="stat-value">{teamMembers.reduce((acc, m) => acc + m.tasksInProgress, 0)}</div>
+          <div className="stat-label">Tasks In Progress</div>
+        </div>
+      </div>
+
+      <div className="team-grid">
         {teamMembers.map((member) => (
           <div 
             key={member.id} 
             className="team-card"
             onClick={() => handleMemberClick(member)}
-            style={{
-              backgroundColor: 'white',
-              borderRadius: '16px',
-              padding: '24px',
-              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-              cursor: 'pointer',
-              transition: 'transform 0.2s, box-shadow 0.2s',
-              border: '1px solid #e2e8f0'
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.transform = 'translateY(-4px)';
-              e.currentTarget.style.boxShadow = '0 10px 25px -3px rgba(0, 0, 0, 0.1)';
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
-            }}
           >
-            <div className="card-header" style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'flex-start',
-              marginBottom: '16px'
-            }}>
-              <div className="member-avatar-container" style={{ position: 'relative' }}>
-                <div className="member-avatar" style={{
-                  width: '48px',
-                  height: '48px',
-                  borderRadius: '50%',
-                  backgroundColor: '#3b82f6',
-                  color: 'white',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '16px',
-                  fontWeight: '600'
-                }}>
+            <div className="card-header">
+              <div className="member-avatar-container">
+                <div className="member-avatar">
                   {member.avatar}
                 </div>
                 <div 
                   className="status-indicator"
-                  style={{
-                    position: 'absolute',
-                    bottom: '2px',
-                    right: '2px',
-                    width: '12px',
-                    height: '12px',
-                    borderRadius: '50%',
-                    border: '2px solid white',
-                    backgroundColor: getStatusColor(member.status)
-                  }}
+                  style={{ backgroundColor: getStatusColor(member.status) }}
                 ></div>
               </div>
-              <div className="member-menu-container" style={{ position: 'relative' }}>
+              <div className="member-menu-container">
                 <button 
                   className="member-menu"
                   onClick={(e) => toggleMemberMenu(member.id, e)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    padding: '4px',
-                    borderRadius: '4px',
-                    color: '#64748b'
-                  }}
                 >
                   <MoreHorizontal size={16} />
                 </button>
                 {showMemberMenu === member.id && (
-                  <div className="member-dropdown" style={{
-                    position: 'absolute',
-                    top: '100%',
-                    right: 0,
-                    backgroundColor: 'white',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '8px',
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                    zIndex: 10,
-                    minWidth: '150px'
-                  }}>
+                  <div className="member-dropdown">
                     <button 
                       className="dropdown-item remove"
                       onClick={(e) => {
@@ -414,21 +358,6 @@ const TeamView = () => {
                         setMemberToRemove(member);
                         setShowMemberMenu(null);
                       }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        width: '100%',
-                        padding: '8px 12px',
-                        border: 'none',
-                        background: 'none',
-                        cursor: 'pointer',
-                        fontSize: '14px',
-                        color: '#dc2626',
-                        borderRadius: '6px'
-                      }}
-                      onMouseOver={(e) => e.target.style.backgroundColor = '#fef2f2'}
-                      onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
                     >
                       <Trash2 size={14} />
                       Remove Member
@@ -438,128 +367,39 @@ const TeamView = () => {
               </div>
             </div>
 
-            <div className="member-info" style={{ marginBottom: '16px' }}>
-              <h3 className="member-name" style={{
-                fontSize: '18px',
-                fontWeight: '600',
-                color: '#1e293b',
-                margin: '0 0 4px 0'
-              }}>{member.name}</h3>
-              <p className="member-role" style={{
-                fontSize: '14px',
-                color: '#64748b',
-                margin: 0
-              }}>{member.role}</p>
+            <div className="member-info">
+              <h3 className="member-name">{member.name}</h3>
+              <p className="member-role">{member.role}</p>
             </div>
 
-            <div className="member-contact" style={{ marginBottom: '16px' }}>
-              <div className="contact-item" style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                marginBottom: '8px',
-                fontSize: '14px',
-                color: '#64748b'
-              }}>
+            <div className="member-contact">
+              <div className="contact-item">
                 <Mail size={14} />
                 <span>{member.email}</span>
               </div>
-              <div className="contact-item" style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                marginBottom: '8px',
-                fontSize: '14px',
-                color: '#64748b'
-              }}>
+              <div className="contact-item">
                 <MapPin size={14} />
                 <span>{member.location}</span>
               </div>
             </div>
 
-            <div className="member-stats" style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              marginBottom: '20px',
-              padding: '16px',
-              backgroundColor: '#f8fafc',
-              borderRadius: '8px'
-            }}>
-              <div className="stat-group" style={{ textAlign: 'center' }}>
-                <div className="stat-number" style={{
-                  fontSize: '20px',
-                  fontWeight: '700',
-                  color: '#1e293b',
-                  marginBottom: '4px'
-                }}>{member.tasksCompleted}</div>
-                <div className="stat-text" style={{
-                  fontSize: '12px',
-                  color: '#64748b',
-                  fontWeight: '500'
-                }}>Completed</div>
+            <div className="member-stats">
+              <div className="stat-group">
+                <div className="stat-number">{member.tasksCompleted}</div>
+                <div className="stat-text">Completed</div>
               </div>
-              <div className="stat-group" style={{ textAlign: 'center' }}>
-                <div className="stat-number" style={{
-                  fontSize: '20px',
-                  fontWeight: '700',
-                  color: '#1e293b',
-                  marginBottom: '4px'
-                }}>{member.tasksInProgress}</div>
-                <div className="stat-text" style={{
-                  fontSize: '12px',
-                  color: '#64748b',
-                  fontWeight: '500'
-                }}>In Progress</div>
+              <div className="stat-group">
+                <div className="stat-number">{member.tasksInProgress}</div>
+                <div className="stat-text">In Progress</div>
               </div>
             </div>
 
-            <div className="card-actions" style={{
-              display: 'flex',
-              gap: '12px'
-            }}>
-              <button 
-                className="action-btn"
-                style={{
-                  flex: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  padding: '10px 16px',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '6px',
-                  backgroundColor: 'white',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  transition: 'background-color 0.2s'
-                }}
-                onMouseOver={(e) => e.target.style.backgroundColor = '#f8fafc'}
-                onMouseOut={(e) => e.target.style.backgroundColor = 'white'}
-              >
+            <div className="card-actions">
+              <button className="action-btn">
                 <MessageCircle size={16} />
                 Message
               </button>
-              <button 
-                className="action-btn"
-                style={{
-                  flex: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  padding: '10px 16px',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '6px',
-                  backgroundColor: 'white',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  transition: 'background-color 0.2s'
-                }}
-                onMouseOver={(e) => e.target.style.backgroundColor = '#f8fafc'}
-                onMouseOut={(e) => e.target.style.backgroundColor = 'white'}
-              >
+              <button className="action-btn">
                 <Phone size={16} />
                 Call
               </button>
@@ -568,149 +408,77 @@ const TeamView = () => {
         ))}
       </div>
 
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="pagination">
+          <button
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="pagination-btn"
+          >
+            Previous
+          </button>
+          
+          <span className="pagination-info">
+            Page {currentPage} of {totalPages}
+          </span>
+          
+          <button
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="pagination-btn"
+          >
+            Next
+          </button>
+        </div>
+      )}
+
       {/* Member Details Modal */}
       {selectedMember && (
-        <div className="member-modal" style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }} onClick={() => setSelectedMember(null)}>
-          <div className="modal-content" style={{
-            backgroundColor: 'white',
-            borderRadius: '16px',
-            padding: '32px',
-            maxWidth: '500px',
-            width: '90%',
-            maxHeight: '80vh',
-            overflow: 'auto'
-          }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header" style={{
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: '16px',
-              marginBottom: '24px',
-              position: 'relative'
-            }}>
-              <div className="modal-avatar-container" style={{ position: 'relative' }}>
-                <div className="modal-avatar" style={{
-                  width: '64px',
-                  height: '64px',
-                  borderRadius: '50%',
-                  backgroundColor: '#3b82f6',
-                  color: 'white',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '20px',
-                  fontWeight: '600'
-                }}>
+        <div className="member-modal" onClick={() => setSelectedMember(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-avatar-container">
+                <div className="modal-avatar">
                   {selectedMember.avatar}
                 </div>
                 <div 
                   className="modal-status"
-                  style={{
-                    position: 'absolute',
-                    bottom: '4px',
-                    right: '4px',
-                    width: '16px',
-                    height: '16px',
-                    borderRadius: '50%',
-                    border: '3px solid white',
-                    backgroundColor: getStatusColor(selectedMember.status)
-                  }}
+                  style={{ backgroundColor: getStatusColor(selectedMember.status) }}
                 ></div>
               </div>
-              <div className="modal-info" style={{ flex: 1 }}>
-                <h2 style={{margin: '0 0 4px 0', fontSize: '24px', color: '#1e293b'}}>{selectedMember.name}</h2>
-                <p style={{margin: '0 0 8px 0', fontSize: '16px', color: '#64748b'}}>{selectedMember.role}</p>
-                <span style={getStatusBadgeStyle(selectedMember.status)}>
+              <div className="modal-info">
+                <h2>{selectedMember.name}</h2>
+                <p>{selectedMember.role}</p>
+                <span className={`status-badge ${selectedMember.status}`}>
                   {selectedMember.status.charAt(0).toUpperCase() + selectedMember.status.slice(1)}
                 </span>
               </div>
               <button 
                 className="close-modal"
                 onClick={() => setSelectedMember(null)}
-                style={{
-                  position: 'absolute',
-                  top: '-8px',
-                  right: '-8px',
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '50%',
-                  border: 'none',
-                  backgroundColor: '#f1f5f9',
-                  cursor: 'pointer',
-                  fontSize: '18px',
-                  color: '#64748b'
-                }}
-                onMouseOver={(e) => e.target.style.backgroundColor = '#e2e8f0'}
-                onMouseOut={(e) => e.target.style.backgroundColor = '#f1f5f9'}
               >
                 ×
               </button>
             </div>
 
-            <div className="modal-body" style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '24px'
-            }}>
+            <div className="modal-body">
               <div className="contact-section">
-                <h3 style={{margin: '0 0 12px 0', fontSize: '18px', color: '#1e293b'}}>Contact Information</h3>
-                <div className="contact-details" style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '12px',
-                  marginTop: '12px'
-                }}>
-                  <div className="detail-item" style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    padding: '8px 0',
-                    fontSize: '14px',
-                    color: '#64748b'
-                  }}>
+                <h3>Contact Information</h3>
+                <div className="contact-details">
+                  <div className="detail-item">
                     <Mail size={16} />
                     <span>{selectedMember.email}</span>
                   </div>
-                  <div className="detail-item" style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    padding: '8px 0',
-                    fontSize: '14px',
-                    color: '#64748b'
-                  }}>
+                  <div className="detail-item">
                     <Phone size={16} />
                     <span>{selectedMember.phone}</span>
                   </div>
-                  <div className="detail-item" style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    padding: '8px 0',
-                    fontSize: '14px',
-                    color: '#64748b'
-                  }}>
+                  <div className="detail-item">
                     <MapPin size={16} />
                     <span>{selectedMember.location}</span>
                   </div>
-                  <div className="detail-item" style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    padding: '8px 0',
-                    fontSize: '14px',
-                    color: '#64748b'
-                  }}>
+                  <div className="detail-item">
                     <Calendar size={16} />
                     <span>Joined {new Date(selectedMember.joinDate).toLocaleDateString()}</span>
                   </div>
@@ -718,75 +486,44 @@ const TeamView = () => {
               </div>
 
               <div className="performance-section">
-                <h3 style={{margin: '0 0 12px 0', fontSize: '18px', color: '#1e293b'}}>Performance</h3>
-                <div className="performance-stats" style={{
-                  display: 'flex',
-                  gap: '20px',
-                  marginTop: '12px'
-                }}>
-                  <div className="perf-stat" style={{
-                    flex: 1,
-                    textAlign: 'center',
-                    padding: '16px',
-                    backgroundColor: '#f8fafc',
-                    borderRadius: '8px'
-                  }}>
-                    <div className="perf-number" style={{
-                      fontSize: '24px',
-                      fontWeight: '700',
-                      color: '#1e293b',
-                      marginBottom: '4px'
-                    }}>{selectedMember.tasksCompleted}</div>
-                    <div className="perf-label" style={{
-                      fontSize: '12px',
-                      color: '#64748b',
-                      fontWeight: '500'
-                    }}>Tasks Completed</div>
+                <h3>Performance</h3>
+                <div className="performance-stats">
+                  <div className="perf-stat">
+                    <div className="perf-number">{selectedMember.tasksCompleted}</div>
+                    <div className="perf-label">Tasks Completed</div>
                   </div>
-                  <div className="perf-stat" style={{
-                    flex: 1,
-                    textAlign: 'center',
-                    padding: '16px',
-                    backgroundColor: '#f8fafc',
-                    borderRadius: '8px'
-                  }}>
-                    <div className="perf-number" style={{
-                      fontSize: '24px',
-                      fontWeight: '700',
-                      color: '#1e293b',
-                      marginBottom: '4px'
-                    }}>{selectedMember.tasksInProgress}</div>
-                    <div className="perf-label" style={{
-                      fontSize: '12px',
-                      color: '#64748b',
-                      fontWeight: '500'
-                    }}>Tasks In Progress</div>
+                  <div className="perf-stat">
+                    <div className="perf-number">{selectedMember.tasksInProgress}</div>
+                    <div className="perf-label">Tasks In Progress</div>
                   </div>
-                  <div className="perf-stat" style={{
-                    flex: 1,
-                    textAlign: 'center',
-                    padding: '16px',
-                    backgroundColor: '#f8fafc',
-                    borderRadius: '8px'
-                  }}>
-                    <div className="perf-number" style={{
-                      fontSize: '24px',
-                      fontWeight: '700',
-                      color: '#1e293b',
-                      marginBottom: '4px'
-                    }}>
+                  <div className="perf-stat">
+                    <div className="perf-number">
                       {selectedMember.tasksCompleted + selectedMember.tasksInProgress > 0 
                         ? Math.round((selectedMember.tasksCompleted / (selectedMember.tasksCompleted + selectedMember.tasksInProgress)) * 100)
                         : 0}%
                     </div>
-                    <div className="perf-label" style={{
-                      fontSize: '12px',
-                      color: '#64748b',
-                      fontWeight: '500'
-                    }}>Success Rate</div>
+                    <div className="perf-label">Success Rate</div>
                   </div>
                 </div>
               </div>
+
+              {selectedMember.notes && (
+                <div className="notes-section">
+                  <h3>Notes</h3>
+                  <p>{selectedMember.notes}</p>
+                </div>
+              )}
+
+              {selectedMember.tags && selectedMember.tags.length > 0 && (
+                <div className="tags-section">
+                  <h3>Tags</h3>
+                  <div className="tags-container">
+                    {selectedMember.tags.map((tag, index) => (
+                      <span key={index} className="tag">{tag}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -794,113 +531,36 @@ const TeamView = () => {
 
       {/* Remove Member Confirmation Modal */}
       {memberToRemove && (
-        <div className="member-modal" style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }} onClick={() => setMemberToRemove(null)}>
-          <div className="modal-content remove-member-modal" style={{
-            backgroundColor: 'white',
-            borderRadius: '16px',
-            padding: '32px',
-            maxWidth: '500px',
-            width: '90%',
-            maxHeight: '80vh',
-            overflow: 'auto'
-          }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header" style={{
-              display: 'flex',
-              alignItems: 'flex-start',gap: '16px',
-              marginBottom: '24px',
-              position: 'relative'
-            }}>
-              <div className="warning-icon" style={{
-                width: '48px',
-                height: '48px',
-                borderRadius: '50%',
-                backgroundColor: '#fef2f2',
-                color: '#dc2626',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '20px'
-              }}>
+        <div className="member-modal" onClick={() => setMemberToRemove(null)}>
+          <div className="modal-content remove-member-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="warning-icon">
                 <Trash2 size={24} />
               </div>
-              <div className="modal-info" style={{ flex: 1 }}>
-                <h2 style={{margin: '0 0 8px 0', fontSize: '20px', color: '#1e293b'}}>Remove Team Member</h2>
-                <p style={{margin: 0, fontSize: '14px', color: '#64748b'}}>
+              <div className="modal-info">
+                <h2>Remove Team Member</h2>
+                <p>
                   Are you sure you want to remove <strong>{memberToRemove.name}</strong> from the team? This action cannot be undone.
                 </p>
               </div>
               <button 
                 className="close-modal"
                 onClick={() => setMemberToRemove(null)}
-                style={{
-                  position: 'absolute',
-                  top: '-8px',
-                  right: '-8px',
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '50%',
-                  border: 'none',
-                  backgroundColor: '#f1f5f9',
-                  cursor: 'pointer',
-                  fontSize: '18px',
-                  color: '#64748b'
-                }}
-                onMouseOver={(e) => e.target.style.backgroundColor = '#e2e8f0'}
-                onMouseOut={(e) => e.target.style.backgroundColor = '#f1f5f9'}
               >
                 ×
               </button>
             </div>
 
-            <div className="modal-actions" style={{
-              display: 'flex',
-              gap: '12px',
-              justifyContent: 'flex-end'
-            }}>
+            <div className="modal-actions">
               <button 
                 className="cancel-btn"
                 onClick={() => setMemberToRemove(null)}
-                style={{
-                  padding: '10px 20px',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '8px',
-                  backgroundColor: 'white',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  color: '#64748b'
-                }}
-                onMouseOver={(e) => e.target.style.backgroundColor = '#f8fafc'}
-                onMouseOut={(e) => e.target.style.backgroundColor = 'white'}
               >
                 Cancel
               </button>
               <button 
                 className="remove-btn"
                 onClick={() => handleRemoveMember(memberToRemove.id)}
-                style={{
-                  padding: '10px 20px',
-                  border: 'none',
-                  borderRadius: '8px',
-                  backgroundColor: '#dc2626',
-                  color: 'white',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: '500'
-                }}
-                onMouseOver={(e) => e.target.style.backgroundColor = '#b91c1c'}
-                onMouseOut={(e) => e.target.style.backgroundColor = '#dc2626'}
               >
                 Remove Member
               </button>
@@ -911,248 +571,104 @@ const TeamView = () => {
 
       {/* Add Member Modal */}
       {isAddMemberModalOpen && (
-        <div className="member-modal" style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }} onClick={() => setIsAddMemberModalOpen(false)}>
-          <div className="modal-content" style={{
-            backgroundColor: 'white',
-            borderRadius: '16px',
-            padding: '32px',
-            maxWidth: '500px',
-            width: '90%',
-            maxHeight: '80vh',
-            overflow: 'auto'
-          }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header" style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: '24px'
-            }}>
-              <h2 style={{margin: 0, fontSize: '24px', color: '#1e293b'}}>Add New Member</h2>
+        <div className="member-modal" onClick={() => setIsAddMemberModalOpen(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Add New Member</h2>
               <button 
                 className="close-modal"
                 onClick={() => setIsAddMemberModalOpen(false)}
-                style={{
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '50%',
-                  border: 'none',
-                  backgroundColor: '#f1f5f9',
-                  cursor: 'pointer',
-                  fontSize: '18px',
-                  color: '#64748b'
-                }}
-                onMouseOver={(e) => e.target.style.backgroundColor = '#e2e8f0'}
-                onMouseOut={(e) => e.target.style.backgroundColor = '#f1f5f9'}
               >
                 ×
               </button>
             </div>
 
-            <form onSubmit={handleAddMember} style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '20px'
-            }}>
+            <form onSubmit={handleAddMember} className="add-member-form">
               <div className="form-group">
-                <label style={{
-                  display: 'block',
-                  marginBottom: '8px',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  color: '#374151'
-                }}>Name *</label>
+                <label>Name *</label>
                 <input
                   type="text"
                   value={newMember.name}
                   onChange={(e) => handleInputChange('name', e.target.value)}
                   required
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    boxSizing: 'border-box'
-                  }}
                   placeholder="Enter full name"
                 />
               </div>
 
               <div className="form-group">
-                <label style={{
-                  display: 'block',
-                  marginBottom: '8px',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  color: '#374151'
-                }}>Role *</label>
+                <label>Position *</label>
                 <input
                   type="text"
-                  value={newMember.role}
-                  onChange={(e) => handleInputChange('role', e.target.value)}
+                  value={newMember.position}
+                  onChange={(e) => handleInputChange('position', e.target.value)}
                   required
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    boxSizing: 'border-box'
-                  }}
-                  placeholder="Enter job role"
+                  placeholder="Enter job position"
                 />
               </div>
 
               <div className="form-group">
-                <label style={{
-                  display: 'block',
-                  marginBottom: '8px',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  color: '#374151'
-                }}>Email *</label>
+                <label>Email *</label>
                 <input
                   type="email"
                   value={newMember.email}
                   onChange={(e) => handleInputChange('email', e.target.value)}
                   required
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    boxSizing: 'border-box'
-                  }}
                   placeholder="Enter email address"
                 />
               </div>
 
               <div className="form-group">
-                <label style={{
-                  display: 'block',
-                  marginBottom: '8px',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  color: '#374151'
-                }}>Phone</label>
+                <label>Phone</label>
                 <input
                   type="tel"
                   value={newMember.phone}
                   onChange={(e) => handleInputChange('phone', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    boxSizing: 'border-box'
-                  }}
                   placeholder="Enter phone number"
                 />
               </div>
 
               <div className="form-group">
-                <label style={{
-                  display: 'block',
-                  marginBottom: '8px',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  color: '#374151'
-                }}>Location</label>
+                <label>Company</label>
                 <input
                   type="text"
-                  value={newMember.location}
-                  onChange={(e) => handleInputChange('location', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    boxSizing: 'border-box'
-                  }}
-                  placeholder="Enter location"
+                  value={newMember.company}
+                  onChange={(e) => handleInputChange('company', e.target.value)}
+                  placeholder="Enter company name"
                 />
               </div>
 
               <div className="form-group">
-                <label style={{
-                  display: 'block',
-                  marginBottom: '8px',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  color: '#374151'
-                }}>Status</label>
-                <select
-                  value={newMember.status}
-                  onChange={(e) => handleInputChange('status', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  <option value="online">Online</option>
-                  <option value="busy">Busy</option>
-                  <option value="offline">Offline</option>
-                </select>
+                <label>Notes</label>
+                <textarea
+                  value={newMember.notes}
+                  onChange={(e) => handleInputChange('notes', e.target.value)}
+                  placeholder="Any additional notes..."
+                  rows={3}
+                />
               </div>
 
-              <div className="form-actions" style={{
-                display: 'flex',
-                gap: '12px',
-                justifyContent: 'flex-end',
-                marginTop: '20px'
-              }}>
+              <div className="form-actions">
                 <button 
                   type="button"
+                  className="cancel-btn"
                   onClick={() => setIsAddMemberModalOpen(false)}
-                  style={{
-                    padding: '12px 20px',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '8px',
-                    backgroundColor: 'white',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    color: '#64748b'
-                  }}
-                  onMouseOver={(e) => e.target.style.backgroundColor = '#f8fafc'}
-                  onMouseOut={(e) => e.target.style.backgroundColor = 'white'}
+                  disabled={isSubmitting}
                 >
                   Cancel
                 </button>
                 <button 
                   type="submit"
-                  style={{
-                    padding: '12px 20px',
-                    border: 'none',
-                    borderRadius: '8px',
-                    backgroundColor: '#3b82f6',
-                    color: 'white',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: '500'
-                  }}
-                  onMouseOver={(e) => e.target.style.backgroundColor = '#2563eb'}
-                  onMouseOut={(e) => e.target.style.backgroundColor = '#3b82f6'}
+                  className="submit-btn"
+                  disabled={isSubmitting}
                 >
-                  Add Member
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 size={16} className="spinner" />
+                      Adding...
+                    </>
+                  ) : (
+                    'Add Member'
+                  )}
                 </button>
               </div>
             </form>

@@ -158,7 +158,7 @@ const KanbanBoard = () => {
           throw new Error(errorData.message || 'Failed to create task');
         }
       }
-l
+
       await fetchKanbanData();
       setIsModalOpen(false);
       setSelectedTask(null);
