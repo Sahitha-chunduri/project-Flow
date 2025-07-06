@@ -245,17 +245,35 @@ router.put('/tasks/:id', auth, async (req, res) => {
       return res.status(404).json({ message: 'Task not found' });
     }
 
-    if (task.createdBy.toString() !== req.user.id && 
-        (task.assignedTo && task.assignedTo.toString() !== req.user.id)) {
+    // Fixed authorization logic - properly handle ObjectId comparison
+    const isCreator = task.createdBy.toString() === req.user.id;
+    const isAssignee = task.assignedTo && task.assignedTo.toString() === req.user.id;
+    
+    if (!isCreator && !isAssignee) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
     const oldStatus = task.status;
     const oldPriority = task.priority;
 
+    // Update task fields
     if (title !== undefined) task.title = title;
     if (description !== undefined) task.description = description;
-    if (assignedTo !== undefined) task.assignedTo = assignedTo;
+    
+    // Handle assignedTo field properly - convert to ObjectId if needed
+    if (assignedTo !== undefined) {
+      if (assignedTo === null || assignedTo === '') {
+        task.assignedTo = null;
+      } else {
+        const mongoose = require('mongoose');
+        if (mongoose.Types.ObjectId.isValid(assignedTo)) {
+          task.assignedTo = new mongoose.Types.ObjectId(assignedTo);
+        } else {
+          return res.status(400).json({ message: 'Invalid assignedTo user ID' });
+        }
+      }
+    }
+    
     if (priority !== undefined) task.priority = priority;
     if (dueDate !== undefined) task.dueDate = dueDate;
     if (status !== undefined) {
@@ -272,25 +290,30 @@ router.put('/tasks/:id', auth, async (req, res) => {
     await updatedTask.populate('assignedTo', 'firstName lastName email avatar');
     await updatedTask.populate('createdBy', 'firstName lastName email');
 
+    // Log activity if status changed
     if (oldStatus !== status) {
-      const activity = new Activity({
-        user: req.user.id,
-        action: 'status_changed',
-        target: 'task',
-        targetId: task._id,
-        project: task.projectName,
-        description: `Changed task status from "${oldStatus}" to "${status}"`,
-        metadata: { taskId: task._id, taskTitle: task.title, oldStatus, newStatus: status }
-      });
-      await activity.save();
+      try {
+        const activity = new Activity({
+          user: req.user.id,
+          action: 'status_changed',
+          target: 'task',
+          targetId: task._id,
+          project: task.projectName,
+          description: `Changed task status from "${oldStatus}" to "${status}"`,
+          metadata: { taskId: task._id, taskTitle: task.title, oldStatus, newStatus: status }
+        });
+        await activity.save();
+      } catch (activityError) {
+        console.log('Activity log error:', activityError);
+      }
     }
 
     res.json(updatedTask);
   } catch (error) {
+    console.error('Task update error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
-
 // DELETE /api/kanban/tasks/:id - Delete task
 router.delete('/tasks/:id', auth, async (req, res) => {
   console.log("User from token:", req.user);
@@ -343,8 +366,11 @@ router.put('/tasks/:id/move', auth, async (req, res) => {
       return res.status(404).json({ message: 'Task not found' });
     }
 
-    if (task.createdBy.toString() !== req.user.id && 
-        (task.assignedTo && task.assignedTo.toString() !== req.user.id)) {
+    // Fixed authorization logic - same fix as above
+    const isCreator = task.createdBy.toString() === req.user.id;
+    const isAssignee = task.assignedTo && task.assignedTo.toString() === req.user.id;
+    
+    if (!isCreator && !isAssignee) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
@@ -360,19 +386,25 @@ router.put('/tasks/:id/move', auth, async (req, res) => {
     await updatedTask.populate('assignedTo', 'firstName lastName email avatar');
     await updatedTask.populate('createdBy', 'firstName lastName email');
 
-    const activity = new Activity({
-      user: req.user.id,
-      action: 'status_changed',
-      target: 'task',
-      targetId: task._id,
-      project: task.projectName,
-      description: `Moved task "${task.title}" from "${oldStatus}" to "${status}"`,
-      metadata: { taskId: task._id, taskTitle: task.title, oldStatus, newStatus: status }
-    });
-    await activity.save();
+    // Log activity
+    try {
+      const activity = new Activity({
+        user: req.user.id,
+        action: 'status_changed',
+        target: 'task',
+        targetId: task._id,
+        project: task.projectName,
+        description: `Moved task "${task.title}" from "${oldStatus}" to "${status}"`,
+        metadata: { taskId: task._id, taskTitle: task.title, oldStatus, newStatus: status }
+      });
+      await activity.save();
+    } catch (activityError) {
+      console.log('Activity log error:', activityError);
+    }
 
     res.json(updatedTask);
   } catch (error) {
+    console.error('Task move error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
