@@ -19,7 +19,6 @@ const addContact = asyncHandler(async (req, res) => {
         throw new Error("Contact with this email already exists");
     }
 
-    // Fix: Use a different variable name to avoid conflict with the model
     const newContact = await contact.create({
         user_id: req.user.id,
         name: name.trim(),
@@ -162,7 +161,6 @@ const updateContact = asyncHandler(async (req, res) => {
         throw new Error("Contact not found");
     }
 
-    // Check if email is being changed and if it already exists
     if (email && email.toLowerCase() !== contactItem.email) {
         const existingContact = await contact.findOne({
             user_id: req.user.id,
@@ -223,8 +221,6 @@ const deleteContact = asyncHandler(async (req, res) => {
         res.status(404);
         throw new Error("Contact not found");
     }
-
-    // Soft delete by setting isActive to false
     await contact.findByIdAndUpdate(req.params.id, { isActive: false });
 
     res.status(200).json({

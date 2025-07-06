@@ -25,10 +25,8 @@ const TeamView = () => {
     tags: []
   });
 
-  // API Configuration
   const API_BASE_URL =  'http://localhost:5000/api';
 
-  // API Helper Functions
   const getAuthToken = () => {
     return localStorage.getItem('accessToken') || localStorage.getItem('token');
   };
@@ -54,7 +52,6 @@ const TeamView = () => {
       const response = await fetch(url, config);
       
       if (response.status === 401) {
-        // Token expired, redirect to login
         localStorage.removeItem('accessToken');
         localStorage.removeItem('token');
         window.location.href = '/login';
@@ -74,7 +71,6 @@ const TeamView = () => {
     }
   };
 
-  // Load team members from backend
   useEffect(() => {
     fetchTeamMembers();
   }, [currentPage, searchTerm]);
@@ -92,7 +88,6 @@ const TeamView = () => {
       const response = await makeAPIRequest(`/contacts?${queryParams.toString()}`);
 
       if (response.success) {
-        // Transform backend data to match frontend structure
         const transformedMembers = response.data.map(contact => ({
           id: contact.id,
           name: contact.name,
@@ -101,8 +96,8 @@ const TeamView = () => {
           phone: contact.phone,
           location: contact.company || 'Not specified',
           avatar: generateAvatar(contact.name),
-          status: 'online', // Default status since backend doesn't track this
-          tasksCompleted: Math.floor(Math.random() * 20), // Mock data
+          status: 'online', 
+          tasksCompleted: Math.floor(Math.random() * 20), //mock data
           tasksInProgress: Math.floor(Math.random() * 5),
           joinDate: new Date(contact.createdAt).toISOString().split('T')[0],
           notes: contact.notes,
@@ -148,8 +143,6 @@ const TeamView = () => {
     try {
       setIsSubmitting(true);
       setError(null);
-
-      // Transform frontend data to backend format
       const memberData = {
         name: newMember.name,
         email: newMember.email,
@@ -166,7 +159,6 @@ const TeamView = () => {
       });
 
       if (response.success) {
-        // Add the new member to the local state
         const newTeamMember = {
           id: response.data.id,
           name: response.data.name,
@@ -184,8 +176,6 @@ const TeamView = () => {
         };
 
         setTeamMembers([newTeamMember, ...teamMembers]);
-        
-        // Reset form
         setNewMember({
           name: '',
           position: '',
@@ -216,7 +206,6 @@ const TeamView = () => {
       });
       
       if (response.success) {
-        // Remove from local state
         setTeamMembers(teamMembers.filter(member => member.id !== memberId));
         setMemberToRemove(null);
         setShowMemberMenu(null);
@@ -253,8 +242,6 @@ const TeamView = () => {
   const handlePageChange = (page) => {
     setCurrentPage(page);
   };
-
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = () => {
       setShowMemberMenu(null);
@@ -408,7 +395,6 @@ const TeamView = () => {
         ))}
       </div>
 
-      {/* Pagination */}
       {totalPages > 1 && (
         <div className="pagination">
           <button
@@ -433,7 +419,6 @@ const TeamView = () => {
         </div>
       )}
 
-      {/* Member Details Modal */}
       {selectedMember && (
         <div className="member-modal" onClick={() => setSelectedMember(null)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -529,7 +514,6 @@ const TeamView = () => {
         </div>
       )}
 
-      {/* Remove Member Confirmation Modal */}
       {memberToRemove && (
         <div className="member-modal" onClick={() => setMemberToRemove(null)}>
           <div className="modal-content remove-member-modal" onClick={(e) => e.stopPropagation()}>
@@ -569,7 +553,6 @@ const TeamView = () => {
         </div>
       )}
 
-      {/* Add Member Modal */}
       {isAddMemberModalOpen && (
         <div className="member-modal" onClick={() => setIsAddMemberModalOpen(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
